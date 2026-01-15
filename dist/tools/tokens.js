@@ -1,0 +1,130 @@
+/**
+ * Token manipulation tools for llama-mcp-server.
+ *
+ * Tools: llama_tokenize, llama_detokenize, llama_apply_template
+ */
+import { z } from 'zod';
+/**
+ * Format error messages to be more helpful.
+ */
+function formatError(message, baseUrl) {
+    if (message.includes('ECONNREFUSED') || message.includes('fetch failed')) {
+        return `Cannot connect to llama-server at ${baseUrl}. Is it running? Use llama_start or start it manually.`;
+    }
+    if (message.includes('abort') || message.includes('timeout')) {
+        return `Request timed out. Try reducing max_tokens or check server load.`;
+    }
+    return message;
+}
+/**
+ * Input schema for llama_tokenize tool.
+ */
+const TokenizeInputSchema = z.object({
+    content: z.string().describe('Text to tokenize'),
+    add_special: z.boolean().optional().default(true).describe('Add BOS/EOS tokens'),
+    with_pieces: z.boolean().optional().default(false).describe('Include token strings'),
+});
+/**
+ * Create the llama_tokenize tool.
+ *
+ * Converts text to token IDs. Optionally includes BOS/EOS tokens
+ * and can return the string representation of each token.
+ */
+export function createTokenizeTool(client) {
+    return {
+        name: 'llama_tokenize',
+        description: 'Convert text to token IDs',
+        inputSchema: TokenizeInputSchema,
+        handler: async (input) => {
+            try {
+                const parsed = TokenizeInputSchema.parse(input);
+                const result = await client.tokenize(parsed.content, {
+                    add_special: parsed.add_special,
+                    with_pieces: parsed.with_pieces,
+                });
+                return {
+                    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                };
+            }
+            catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                return {
+                    content: [{ type: 'text', text: `Error: ${formatError(message, client.baseUrl)}` }],
+                    isError: true,
+                };
+            }
+        },
+    };
+}
+/**
+ * Input schema for llama_detokenize tool.
+ */
+const DetokenizeInputSchema = z.object({
+    tokens: z.array(z.number()).describe('Token IDs to convert'),
+});
+/**
+ * Create the llama_detokenize tool.
+ *
+ * Converts token IDs back to text.
+ */
+export function createDetokenizeTool(client) {
+    return {
+        name: 'llama_detokenize',
+        description: 'Convert token IDs back to text',
+        inputSchema: DetokenizeInputSchema,
+        handler: async (input) => {
+            try {
+                const parsed = DetokenizeInputSchema.parse(input);
+                const result = await client.detokenize(parsed.tokens);
+                return {
+                    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                };
+            }
+            catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                return {
+                    content: [{ type: 'text', text: `Error: ${formatError(message, client.baseUrl)}` }],
+                    isError: true,
+                };
+            }
+        },
+    };
+}
+/**
+ * Input schema for llama_apply_template tool.
+ */
+const ApplyTemplateInputSchema = z.object({
+    messages: z.array(z.object({
+        role: z.enum(['system', 'user', 'assistant']).describe('Message role'),
+        content: z.string().describe('Message content'),
+    })).describe('Chat messages to format'),
+});
+/**
+ * Create the llama_apply_template tool.
+ *
+ * Formats chat messages using the model's template without running inference.
+ * Useful for seeing how the chat template formats messages.
+ */
+export function createApplyTemplateTool(client) {
+    return {
+        name: 'llama_apply_template',
+        description: 'Format chat messages using model\'s template without inference',
+        inputSchema: ApplyTemplateInputSchema,
+        handler: async (input) => {
+            try {
+                const parsed = ApplyTemplateInputSchema.parse(input);
+                const result = await client.applyTemplate(parsed.messages);
+                return {
+                    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                };
+            }
+            catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                return {
+                    content: [{ type: 'text', text: `Error: ${formatError(message, client.baseUrl)}` }],
+                    isError: true,
+                };
+            }
+        },
+    };
+}
