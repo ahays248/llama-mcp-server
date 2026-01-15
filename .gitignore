@@ -5,3 +5,4 @@ node_modules/
 # Dev files (not part of package)
 specs/
 ralph-loop.sh
+RELEASING.md
