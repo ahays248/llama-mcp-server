@@ -36,7 +36,98 @@ Configure via environment variables:
 
 ## Usage with Claude Code
 
-Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json` or similar):
+### Option 1: Plugin Installation (Recommended)
+
+Due to a [known bug](https://github.com/anthropics/claude-code/issues/12164) in Claude Code, non-plugin MCP servers may connect but not expose their tools. The workaround is to install llama-mcp-server as a plugin via a local marketplace.
+
+**Step 1: Create the marketplace structure**
+
+```
+llama-marketplace/
+├── .claude-plugin/
+│   └── marketplace.json
+└── plugins/
+    └── llama/
+        ├── .claude-plugin/
+        │   └── plugin.json
+        └── .mcp.json
+```
+
+**Step 2: Create marketplace.json**
+
+```json
+// llama-marketplace/.claude-plugin/marketplace.json
+{
+  "name": "llama-marketplace",
+  "description": "Local marketplace for llama.cpp MCP plugin",
+  "owner": {
+    "name": "Your Name"
+  },
+  "plugins": [
+    {
+      "name": "llama",
+      "description": "llama.cpp MCP server for local LLM inference",
+      "source": "./plugins/llama"
+    }
+  ]
+}
+```
+
+**Step 3: Create plugin.json**
+
+```json
+// llama-marketplace/plugins/llama/.claude-plugin/plugin.json
+{
+  "name": "llama",
+  "version": "0.1.0",
+  "description": "llama.cpp MCP server for local LLM inference"
+}
+```
+
+**Step 4: Create .mcp.json**
+
+```json
+// llama-marketplace/plugins/llama/.mcp.json
+{
+  "mcpServers": {
+    "llama": {
+      "command": "npx",
+      "args": ["-y", "llama-mcp-server"],
+      "env": {
+        "LLAMA_SERVER_URL": "http://localhost:8080",
+        "LLAMA_MODEL_PATH": "/path/to/your/model.gguf",
+        "LLAMA_SERVER_PATH": "/path/to/llama-server"
+      }
+    }
+  }
+}
+```
+
+**Step 5: Install the plugin**
+
+```bash
+# Add the local marketplace
+claude plugin marketplace add /path/to/llama-marketplace
+
+# Install the plugin
+claude plugin install llama@llama-marketplace
+
+# Restart Claude Code
+```
+
+After restart, tools will appear as `mcp__plugin_llama_llama__*`.
+
+### Option 2: Direct MCP Configuration
+
+> **Note:** This method may not work due to the bug mentioned above. If tools don't appear after adding the server, use Option 1.
+
+Add to your Claude Code MCP configuration:
+
+```bash
+claude mcp add llama -e LLAMA_SERVER_URL=http://localhost:8080 -e LLAMA_MODEL_PATH=/path/to/model.gguf -e LLAMA_SERVER_PATH=/path/to/llama-server -- npx -y llama-mcp-server
+```
+
+Or add manually to `~/.claude.json`:
 
 ```json
 {
@@ -139,6 +230,43 @@ npm run build
 # Watch mode for development
 npm run dev
 ```
+
+## Troubleshooting
+
+### Tools don't appear in Claude Code
+
+**Symptom:** Server shows "Connected" in `claude mcp list` but no `llama_*` tools are available.
+
+**Cause:** Known bug in Claude Code where non-plugin MCP servers don't expose tools ([#12164](https://github.com/anthropics/claude-code/issues/12164)).
+
+**Solution:** Use the plugin installation method (Option 1 above).
+
+### HTTP 501 errors for certain tools
+
+Some tools require specific server configurations:
+
+| Tool | Requirement |
+|------|-------------|
+| `llama_metrics` | Start llama-server with `--metrics` flag |
+| `llama_embed` | Start llama-server with `--embedding` flag or use an embedding model |
+| `llama_infill` | Use a model with fill-in-middle support (e.g., CodeLlama, DeepSeek Coder) |
+| `llama_rerank` | Use a reranker model |
+| `llama_load_model` / `llama_unload_model` | llama-server must be in router mode |
+
+### Connection refused errors
+
+**Symptom:** `Cannot connect to llama-server at http://localhost:8080`
+
+**Solutions:**
+1. Use `llama_start` to start the server, or
+2. Start llama-server manually: `llama-server -m /path/to/model.gguf`
+3. Check that `LLAMA_SERVER_URL` matches where llama-server is running
+
+### WSL/Windows path issues
+
+When running in WSL, ensure paths use Linux format:
+- ✓ `/home/user/models/model.gguf`
+- ✗ `C:\Users\user\models\model.gguf`
 
 ## License
 

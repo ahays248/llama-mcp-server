@@ -1,6 +1,6 @@
 {
   "name": "llama-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server bridging Claude Code to local llama.cpp",
   "type": "module",
   "main": "dist/index.js",
